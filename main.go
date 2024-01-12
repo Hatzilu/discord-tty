@@ -12,7 +12,10 @@ import (
 var ws *websocket.Conn
 
 func main() {
+	initializeDiscordClient()
+}
 
+func initializeDiscordClient() {
 	// Set up Discord session
 	godotenv.Load()
 
@@ -28,7 +31,9 @@ func main() {
 		fmt.Println("Error creating Discord session:", err)
 		return
 	}
-	wsErr := connectToGateWay(&token)
+
+	dg.Identify.Intents = discordgo.IntentsAll
+	wsErr := connectToGateWay(token, dg.Identify.Intents)
 	if err != nil {
 		panic(wsErr)
 	}
@@ -63,24 +68,30 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	}
 
-	fmt.Printf("[%s] #%s >> %s: %s\n", guild.Name, channel.Name, m.Author.Username, m.Message.Content)
+	var formattedMessage string
+	if len(m.Message.Embeds) > 0 {
+
+		formattedMessage = "<Embed>"
+	} else {
+		formattedMessage = m.Message.Content
+	}
+
+	fmt.Printf("[%s] #%s >> %s: %s\n", guild.Name, channel.Name, m.Author.Username, formattedMessage)
 }
 
-func connectToGateWay(token *string) error {
+func connectToGateWay(token string, intents discordgo.Intent) error {
 	var err error
 	ws, _, err = websocket.DefaultDialer.Dial("wss://gateway.discord.gg", nil)
 	if err != nil {
 		return err
 	}
 
-	intents := discordgo.IntentMessageContent
-
 	// Send IDENTIFY payload to authenticate with the gateway
 	identifyPayload := fmt.Sprintf(`{
 		"op": 2,
 		"d": {
 			"token": "%s",
-			"intents": %n,  // Replace with the necessary intents for your bot
+			"intents": %x,  // Replace with the necessary intents for your bot
 			"properties": {
 				"$os": "linux",
 				"$browser": "my-bot",
