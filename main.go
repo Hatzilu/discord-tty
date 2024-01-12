@@ -108,7 +108,7 @@ func initializeUi(dg *discordgo.Session) *tview.List {
 
 	// bx := tview.NewBox().SetBorder(true).SetTitle("Discord")
 	serversBox := tview.NewBox().SetBorder(true).SetTitle("Guilds")
-	textChannelsBox := tview.NewBox()
+	textChannelsBox := tview.NewBox().SetBorder(true)
 	messagesBox := tview.NewBox().SetBorder(true).SetTitle("Messages")
 	inputBox := tview.NewBox().SetBorder(true)
 
@@ -142,7 +142,9 @@ func initializeUi(dg *discordgo.Session) *tview.List {
 		messagesList.Clear()
 		channelsList.Clear()
 		app.SetFocus(textChannelsBox)
-
+		appGrid.RemoveItem(guildList)
+		channelsList.SetTitle(guildName)
+		appGrid.AddItem(channelsList, 0, 0, 6, 1, 1, 1, true) // Left - 6 rows
 		guild, err := dg.State.Guild(guildId)
 		if err != nil {
 			fmt.Printf("Failed to get guild by id \"%s\"", guildId)
