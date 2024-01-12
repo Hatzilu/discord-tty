@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/bwmarrin/discordgo"
@@ -17,28 +16,24 @@ func main() {
 	// Set up Discord session
 	godotenv.Load()
 
-	token := os.Getenv("BEARER_TOKEN")
+	// Grab your own discord user token
+	// TODO: find a way to get it automatically
+	token := os.Getenv("USER_TOKEN")
 	if token == "" {
-		log.Fatal("No token provided")
-		return
+		panic("No token provided")
 	}
 
-	dg, err := discordgo.New("Bearer " + token)
+	dg, err := discordgo.New("Bot " + token)
 	if err != nil {
 		fmt.Println("Error creating Discord session:", err)
 		return
 	}
-
-	fmt.Printf(dg.UserAgent)
-
-	// Set up WebSocket connection
-	var errWs error
-	ws, _, errWs = websocket.DefaultDialer.Dial("wss://gateway.discord.gg", nil)
-	if errWs != nil {
-		fmt.Println("Error connecting to Discord WebSocket:", errWs)
-		return
+	wsErr := connectToGateWay(&token)
+	if err != nil {
+		panic(wsErr)
 	}
-	defer ws.Close()
+
+	fmt.Println(dg.UserAgent)
 
 	// Set up event handlers
 	dg.AddHandler(messageCreate)
@@ -50,9 +45,44 @@ func main() {
 		return
 	}
 	defer dg.Close()
+
+	select {}
 }
 
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// Handle incoming messages
-	fmt.Printf("[%s] %s: %s\n", m.GuildID, m.Author.Username, m.Content)
+	fmt.Println(m.Content)
+	fmt.Printf("[%s] %s: %s\n", m.GuildID, m.Author.Username, m.Message.Content)
+}
+
+func connectToGateWay(token *string) error {
+	var err error
+	ws, _, err = websocket.DefaultDialer.Dial("wss://gateway.discord.gg", nil)
+	if err != nil {
+		return err
+	}
+
+	intents := discordgo.IntentMessageContent
+
+	// Send IDENTIFY payload to authenticate with the gateway
+	identifyPayload := fmt.Sprintf(`{
+		"op": 2,
+		"d": {
+			"token": "%s",
+			"intents": %n,  // Replace with the necessary intents for your bot
+			"properties": {
+				"$os": "linux",
+				"$browser": "my-bot",
+				"$device": "my-bot"
+			}
+		}
+	}`, token, intents)
+
+	err = ws.WriteMessage(websocket.TextMessage, []byte(identifyPayload))
+	if err != nil {
+		return err
+	}
+	defer ws.Close()
+
+	return nil
 }
