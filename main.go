@@ -7,15 +7,18 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
+	"github.com/rivo/tview"
 )
 
 var ws *websocket.Conn
 
 func main() {
-	initializeDiscordClient()
-}
+	box := tview.NewBox().SetBorder(true).SetTitle("Discord")
+	tview.NewBox().SetBorder(true).SetTitle("Discord2")
+	app := tview.NewApplication()
 
-func initializeDiscordClient() {
+	list := tview.NewList()
+
 	// Set up Discord session
 	godotenv.Load()
 
@@ -39,9 +42,11 @@ func initializeDiscordClient() {
 	}
 
 	fmt.Println(dg.UserAgent)
-
+	list.Box = box
 	// Set up event handlers
-	dg.AddHandler(messageCreate)
+	dg.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
+		messageCreate(s, m, list)
+	})
 
 	// Open Discord session
 	err = dg.Open()
@@ -51,32 +56,47 @@ func initializeDiscordClient() {
 	}
 	defer dg.Close()
 
-	select {}
+	// guilds := tview.NewList()
+	// for i, guild := range dg.State.Guilds {
+	// 	guilds.AddItem(guild.Name, "", rune(i), nil)
+	// }
+
+	if err := app.SetRoot(list, true).Run(); err != nil {
+		panic(err)
+	}
 }
 
-func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate, list *tview.List) {
 	// Handle incoming messages
 
-	channel, err := s.State.Channel((m.ChannelID))
-	if err != nil {
-		panic(err)
-	}
+	// channel, err := s.State.Channel((m.ChannelID))
+	// if err != nil {
+	// 	panic(err)
+	// }
 
-	guild, err := s.State.Guild(m.GuildID)
-	if err != nil {
-		panic(err)
+	// guild, err := s.State.Guild(m.GuildID)
+	// if err != nil {
+	// 	panic(err)
 
-	}
+	// }
 
 	var formattedMessage string
 	if len(m.Message.Embeds) > 0 {
-
 		formattedMessage = "<Embed>"
+	} else if len(m.Message.Attachments) > 0 {
+		formattedMessage = "<Attachment>"
 	} else {
 		formattedMessage = m.Message.Content
 	}
 
-	fmt.Printf("[%s] #%s >> %s: %s\n", guild.Name, channel.Name, m.Author.Username, formattedMessage)
+	// content := fmt.printf("[%s] #%s >> %s: %s\n", guild.Name, channel.Name, m.Author.Username, formattedMessage)
+	// fmt.Printf("[%s] #%s >> %s: %s\n", guild.Name, channel.Name, m.Author.Username, formattedMessage)
+	// channelIdRune := []rune(m.ChannelID)
+	// list.SetTitle(channel.Name)
+
+	list.AddItem(m.Author.Username+": "+formattedMessage, "", rune(list.GetItemCount()), nil)
+	// list.Draw(list.get)
+
 }
 
 func connectToGateWay(token string, intents discordgo.Intent) error {
