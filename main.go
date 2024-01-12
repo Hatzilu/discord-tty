@@ -13,11 +13,7 @@ import (
 var ws *websocket.Conn
 
 func main() {
-	box := tview.NewBox().SetBorder(true).SetTitle("Discord")
 	tview.NewBox().SetBorder(true).SetTitle("Discord2")
-	app := tview.NewApplication()
-
-	list := tview.NewList()
 
 	// Set up Discord session
 	godotenv.Load()
@@ -29,41 +25,30 @@ func main() {
 		panic("No token provided")
 	}
 
-	dg, err := discordgo.New("Bot " + token)
+	dg, err := initializeDiscordClient(token)
+
+	messagesList := initializeUi(dg)
+
 	if err != nil {
 		fmt.Println("Error creating Discord session:", err)
 		return
 	}
-
-	dg.Identify.Intents = discordgo.IntentsAll
 	wsErr := connectToGateWay(token, dg.Identify.Intents)
 	if err != nil {
 		panic(wsErr)
 	}
 
 	fmt.Println(dg.UserAgent)
-	list.Box = box
 	// Set up event handlers
 	dg.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
-		messageCreate(s, m, list)
+		messageCreate(s, m, messagesList)
 	})
-
-	// Open Discord session
-	err = dg.Open()
-	if err != nil {
-		fmt.Println("Error opening Discord session:", err)
-		return
-	}
-	defer dg.Close()
 
 	// guilds := tview.NewList()
 	// for i, guild := range dg.State.Guilds {
 	// 	guilds.AddItem(guild.Name, "", rune(i), nil)
 	// }
 
-	if err := app.SetRoot(list, true).Run(); err != nil {
-		panic(err)
-	}
 }
 
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate, list *tview.List) {
@@ -97,6 +82,70 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate, list *tview
 	list.AddItem(m.Author.Username+": "+formattedMessage, "", rune(list.GetItemCount()), nil)
 	// list.Draw(list.get)
 
+}
+
+func initializeDiscordClient(token string) (*discordgo.Session, error) {
+
+	dg, err := discordgo.New("Bot " + token)
+	if err != nil {
+		fmt.Println("Error creating Discord session:", err)
+		return dg, err
+	}
+
+	dg.Identify.Intents = discordgo.IntentsAll
+
+	// Open Discord session
+	err = dg.Open()
+	if err != nil {
+		fmt.Println("Error opening Discord session:", err)
+		return dg, err
+	}
+	defer dg.Close()
+
+	return dg, nil
+}
+
+func initializeUi(dg *discordgo.Session) *tview.List {
+
+	// bx := tview.NewBox().SetBorder(true).SetTitle("Discord")
+	serversbx := tview.NewBox().SetBorder(true).SetTitle("Servers")
+	messagesbx := tview.NewBox().SetBorder(true).SetTitle("Messages")
+	inputbx := tview.NewBox().SetBorder(true)
+
+	app := tview.NewApplication()
+
+	messagesList := tview.NewList()
+
+	messageInput := tview.NewInputField()
+	// messagesList.SetTitle()
+
+	guildList := tview.NewList()
+	fmt.Println(dg.State.Guilds)
+
+	for i, guild := range dg.State.Guilds {
+		guildList.AddItem(guild.Name, "", rune(i+1), nil)
+	}
+	guildList.Box = serversbx
+	messagesList.Box = messagesbx
+	messageInput.Box = inputbx
+	appGrid := tview.NewGrid().
+		SetColumns(-1, 24, 16, -1).
+		SetRows(-1, 2, 3, -1).
+		// AddItem(bx, 0, 0, 6, 6, 6, 0, false).          // Top - 1 row
+		AddItem(guildList, 0, 0, 6, 1, 0, 0, true).     // Left - 3 rows
+		AddItem(messagesList, 0, 1, 5, 3, 0, 0, false). // Left - 3 rows
+		AddItem(messageInput, 5, 1, 1, 3, 0, 0, false)  // Left - 3 rows
+		// AddItem(bx, 0, 3, 3, 3, 0, 0, false) // Right - 3 rows
+		// AddItem(bx, 3, 1, 1, 1, 0, 0, false) // Bottom - 1 row
+		// AddItem(label, 1, 1, 1, 1, 0, 0, false).
+		// AddItem(input, 1, 2, 1, 1, 0, 0, false).
+		// AddItem(btn, 2, 1, 1, 2, 0, 0, false)
+
+	if err := app.SetRoot(appGrid, true).Run(); err != nil {
+		panic(err)
+	}
+
+	return messagesList
 }
 
 func connectToGateWay(token string, intents discordgo.Intent) error {
