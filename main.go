@@ -38,7 +38,6 @@ func main() {
 		panic(wsErr)
 	}
 
-	fmt.Println(dg.UserAgent)
 	// Set up event handlers
 	dg.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
 		messageCreate(s, m, messagesList)
@@ -108,38 +107,84 @@ func initializeDiscordClient(token string) (*discordgo.Session, error) {
 func initializeUi(dg *discordgo.Session) *tview.List {
 
 	// bx := tview.NewBox().SetBorder(true).SetTitle("Discord")
-	serversbx := tview.NewBox().SetBorder(true).SetTitle("Servers")
-	messagesbx := tview.NewBox().SetBorder(true).SetTitle("Messages")
-	inputbx := tview.NewBox().SetBorder(true)
+	serversBox := tview.NewBox().SetBorder(true).SetTitle("Guilds")
+	textChannelsBox := tview.NewBox()
+	messagesBox := tview.NewBox().SetBorder(true).SetTitle("Messages")
+	inputBox := tview.NewBox().SetBorder(true)
 
 	app := tview.NewApplication()
 
 	messagesList := tview.NewList()
-
+	channelsList := tview.NewList()
 	messageInput := tview.NewInputField()
-	// messagesList.SetTitle()
 
 	guildList := tview.NewList()
-	fmt.Println(dg.State.Guilds)
+
+	appGrid := tview.NewGrid().
+		SetColumns(20).
+		SetRows(20).
+		// AddItem(bx, 0, 0, 6, 6, 6, 0, false).          // Top - 1 row
+		AddItem(guildList, 0, 0, 6, 1, 1, 1, true).     // Left - 6 rows
+		AddItem(channelsList, 0, 1, 6, 1, 0, 0, false). // Left - 6 rows
+		AddItem(messagesList, 0, 2, 1, 2, 0, 0, false). // Left - 5 rows
+		AddItem(messageInput, 3, 1, 1, 3, 0, 0, false)  // Left - 3 rows
+	// AddItem(bx, 0, 3, 3, 3, 0, 0, false) // Right - 3 rows
+	// AddItem(bx, 3, 1, 1, 1, 0, 0, false) // Bottom - 1 row
+	// AddItem(label, 1, 1, 1, 1, 0, 0, false).
+	// AddItem(input, 1, 2, 1, 1, 0, 0, false).
+	// AddItem(btn, 2, 1, 1, 2, 0, 0, false)
 
 	for i, guild := range dg.State.Guilds {
-		guildList.AddItem(guild.Name, "", rune(i+1), nil)
+		guildList.AddItem(guild.Name, guild.ID, rune(i), nil)
 	}
-	guildList.Box = serversbx
-	messagesList.Box = messagesbx
-	messageInput.Box = inputbx
-	appGrid := tview.NewGrid().
-		SetColumns(-1, 24, 16, -1).
-		SetRows(-1, 2, 3, -1).
-		// AddItem(bx, 0, 0, 6, 6, 6, 0, false).          // Top - 1 row
-		AddItem(guildList, 0, 0, 6, 1, 0, 0, true).     // Left - 3 rows
-		AddItem(messagesList, 0, 1, 5, 3, 0, 0, false). // Left - 3 rows
-		AddItem(messageInput, 5, 1, 1, 3, 0, 0, false)  // Left - 3 rows
-		// AddItem(bx, 0, 3, 3, 3, 0, 0, false) // Right - 3 rows
-		// AddItem(bx, 3, 1, 1, 1, 0, 0, false) // Bottom - 1 row
-		// AddItem(label, 1, 1, 1, 1, 0, 0, false).
-		// AddItem(input, 1, 2, 1, 1, 0, 0, false).
-		// AddItem(btn, 2, 1, 1, 2, 0, 0, false)
+
+	guildList.SetSelectedFunc(func(i int, guildName string, guildId string, r rune) {
+		messagesList.Clear()
+		channelsList.Clear()
+		app.SetFocus(textChannelsBox)
+
+		guild, err := dg.State.Guild(guildId)
+		if err != nil {
+			fmt.Printf("Failed to get guild by id \"%s\"", guildId)
+			panic(err)
+		}
+		fmt.Println(guild.Name)
+
+		for j, channel := range guild.Channels {
+			if channel.Type == discordgo.ChannelTypeGuildText {
+				channelsList.AddItem("#"+channel.Name, channel.ID, rune(j), nil)
+			}
+		}
+	})
+
+	channelsList.SetSelectedFunc(func(i int, channelName string, channelId string, r rune) {
+		messagesList.Clear()
+		app.SetFocus(messageInput)
+		channel, err := dg.State.Channel(channelId)
+		if err != nil {
+			fmt.Printf("Failed to get guild by id \"%s\"", channelId)
+			panic(err)
+		}
+
+		for j, m := range channel.Messages {
+			if j < 20 {
+				var formattedMessage string
+				if len(m.Embeds) > 0 {
+					formattedMessage = "<Embed>"
+				} else if len(m.Attachments) > 0 {
+					formattedMessage = "<Attachment>"
+				} else {
+					formattedMessage = m.Content
+				}
+				messagesList.AddItem(m.Author.Username+": "+formattedMessage, "", rune(j), nil)
+			}
+		}
+	})
+
+	guildList.Box = serversBox
+	messagesList.Box = messagesBox
+	messageInput.Box = inputBox
+	channelsList.Box = textChannelsBox
 
 	if err := app.SetRoot(appGrid, true).Run(); err != nil {
 		panic(err)
@@ -164,7 +209,8 @@ func connectToGateWay(token string, intents discordgo.Intent) error {
 			"properties": {
 				"$os": "linux",
 				"$browser": "my-bot",
-				"$device": "my-bot"
+				"$dev		dg.Client.Get()
+				ice": "my-bot"
 			}
 		}
 	}`, token, intents)
