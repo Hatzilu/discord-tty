@@ -51,8 +51,19 @@ func main() {
 
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// Handle incoming messages
-	fmt.Println(m.Content)
-	fmt.Printf("[%s] %s: %s\n", m.GuildID, m.Author.Username, m.Message.Content)
+
+	channel, err := s.State.Channel((m.ChannelID))
+	if err != nil {
+		panic(err)
+	}
+
+	guild, err := s.State.Guild(m.GuildID)
+	if err != nil {
+		panic(err)
+
+	}
+
+	fmt.Printf("[%s] #%s >> %s: %s\n", guild.Name, channel.Name, m.Author.Username, m.Message.Content)
 }
 
 func connectToGateWay(token *string) error {
