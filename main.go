@@ -110,18 +110,13 @@ func initializeUi(dg *discordgo.Session) *tview.List {
 			panic(err)
 		}
 
-		if channel.MessageCount < 1 {
+		if len(channel.Messages) < 1 {
 			messagesList.Clear()
 			messagesList.AddItem("No messages in "+channelName, "", 0, nil)
 			return
 		}
-		messages, err := dg.ChannelMessages(channelId, 20, "", "", "")
-		if err != nil {
-			fmt.Printf("Failed to get messages from channel \"%s\"", channelId)
-			panic(err)
-		}
 
-		for j, m := range messages {
+		for j, m := range channel.Messages {
 			formattedMessage := formatDiscordMessage(m)
 			fmt.Println(m.Author.Username + ": " + formattedMessage)
 			messagesList.AddItem(m.Author.Username+": "+formattedMessage, "", rune(j), nil)
