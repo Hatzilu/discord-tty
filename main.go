@@ -5,12 +5,9 @@ import (
 	"os"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
 	"github.com/rivo/tview"
 )
-
-var ws *websocket.Conn
 
 func main() {
 	tview.NewBox().SetBorder(true).SetTitle("Discord2")
@@ -33,7 +30,7 @@ func main() {
 		fmt.Println("Error creating Discord session:", err)
 		return
 	}
-	wsErr := connectToGateWay(token, dg.Identify.Intents)
+	wsErr := ConnectToGateWay(token, dg.Identify.Intents)
 	if err != nil {
 		panic(wsErr)
 	}
@@ -43,65 +40,6 @@ func main() {
 		messageCreate(s, m, messagesList)
 	})
 
-	// guilds := tview.NewList()
-	// for i, guild := range dg.State.Guilds {
-	// 	guilds.AddItem(guild.Name, "", rune(i), nil)
-	// }
-
-}
-
-func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate, list *tview.List) {
-	// Handle incoming messages
-
-	// channel, err := s.State.Channel((m.ChannelID))
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	// guild, err := s.State.Guild(m.GuildID)
-	// if err != nil {
-	// 	panic(err)
-
-	// }
-
-	var formattedMessage string
-	if len(m.Message.Embeds) > 0 {
-		formattedMessage = "<Embed>"
-	} else if len(m.Message.Attachments) > 0 {
-		formattedMessage = "<Attachment>"
-	} else {
-		formattedMessage = m.Message.Content
-	}
-
-	// content := fmt.printf("[%s] #%s >> %s: %s\n", guild.Name, channel.Name, m.Author.Username, formattedMessage)
-	// fmt.Printf("[%s] #%s >> %s: %s\n", guild.Name, channel.Name, m.Author.Username, formattedMessage)
-	// channelIdRune := []rune(m.ChannelID)
-	// list.SetTitle(channel.Name)
-
-	list.AddItem(m.Author.Username+": "+formattedMessage, "", rune(list.GetItemCount()), nil)
-	// list.Draw(list.get)
-
-}
-
-func initializeDiscordClient(token string) (*discordgo.Session, error) {
-
-	dg, err := discordgo.New("Bot " + token)
-	if err != nil {
-		fmt.Println("Error creating Discord session:", err)
-		return dg, err
-	}
-
-	dg.Identify.Intents = discordgo.IntentsAll
-
-	// Open Discord session
-	err = dg.Open()
-	if err != nil {
-		fmt.Println("Error opening Discord session:", err)
-		return dg, err
-	}
-	defer dg.Close()
-
-	return dg, nil
 }
 
 func initializeUi(dg *discordgo.Session) *tview.List {
@@ -193,35 +131,4 @@ func initializeUi(dg *discordgo.Session) *tview.List {
 	}
 
 	return messagesList
-}
-
-func connectToGateWay(token string, intents discordgo.Intent) error {
-	var err error
-	ws, _, err = websocket.DefaultDialer.Dial("wss://gateway.discord.gg", nil)
-	if err != nil {
-		return err
-	}
-
-	// Send IDENTIFY payload to authenticate with the gateway
-	identifyPayload := fmt.Sprintf(`{
-		"op": 2,
-		"d": {
-			"token": "%s",
-			"intents": %x,  // Replace with the necessary intents for your bot
-			"properties": {
-				"$os": "linux",
-				"$browser": "my-bot",
-				"$dev		dg.Client.Get()
-				ice": "my-bot"
-			}
-		}
-	}`, token, intents)
-
-	err = ws.WriteMessage(websocket.TextMessage, []byte(identifyPayload))
-	if err != nil {
-		return err
-	}
-	defer ws.Close()
-
-	return nil
 }
