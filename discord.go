@@ -17,6 +17,8 @@ func initializeDiscordClient(token string) (*discordgo.Session, error) {
 
 	dg.Identify.Intents = discordgo.IntentsAll
 
+	dg.State.MaxMessageCount = 100
+
 	// Open Discord session
 	err = dg.Open()
 	if err != nil {

@@ -66,7 +66,7 @@ func initializeUi(dg *discordgo.Session) *tview.List {
 		// AddItem(bx, 0, 0, 6, 6, 6, 0, false).          // Top - 1 row
 		AddItem(guildList, 0, 0, 6, 1, 1, 1, true). // Left - 6 rows
 		// AddItem(channelsList, 0, 1, 6, 1, 0, 0, false). // Left - 6 rows
-		AddItem(messagesList, 0, 2, 1, 2, 0, 0, false). // Left - 5 rows
+		AddItem(messagesList, 0, 1, 1, 2, 0, 0, false). // Left - 5 rows
 		AddItem(messageInput, 3, 1, 1, 3, 0, 0, false)  // Left - 3 rows
 	// AddItem(bx, 0, 3, 3, 3, 0, 0, false) // Right - 3 rows
 	// AddItem(bx, 3, 1, 1, 1, 0, 0, false) // Bottom - 1 row
@@ -109,10 +109,10 @@ func initializeUi(dg *discordgo.Session) *tview.List {
 			fmt.Printf("Failed to get channel by id \"%s\"", channelId)
 			panic(err)
 		}
-		dg.State.MaxMessageCount = 20
 
 		if channel.MessageCount < 1 {
-			fmt.Println("no messages")
+			messagesList.Clear()
+			messagesList.AddItem("No messages in "+channelName, "", 0, nil)
 			return
 		}
 		messages, err := dg.ChannelMessages(channelId, 20, "", "", "")
