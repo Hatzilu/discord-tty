@@ -10,6 +10,7 @@ import (
 )
 
 func main() {
+
 	// Set up Discord session
 	godotenv.Load()
 
@@ -28,6 +29,7 @@ func main() {
 		fmt.Println("Error creating Discord session:", err)
 		return
 	}
+
 	wsErr := ConnectToGateWay(token, dg.Identify.Intents)
 	if err != nil {
 		panic(wsErr)
@@ -50,22 +52,29 @@ func initializeUi(dg *discordgo.Session) *tview.List {
 
 	messagesList := tview.NewList()
 	channelsList := tview.NewList()
+	guildList := tview.NewList()
 	messageInput := tview.NewInputField()
 
-	guildList := tview.NewList()
+	guildList.Box = serversBox
+	messagesList.Box = messagesBox
+	messageInput.Box = inputBox
+	channelsList.Box = textChannelsBox
 
 	appGrid := tview.NewGrid().
 		SetColumns(20).
 		SetRows(20).
 		// AddItem(bx, 0, 0, 6, 6, 6, 0, false).          // Top - 1 row
-		AddItem(guildList, 0, 0, 6, 1, 1, 1, true).     // Left - 6 rows
-		AddItem(channelsList, 0, 1, 6, 1, 0, 0, false). // Left - 6 rows
+		AddItem(guildList, 0, 0, 6, 1, 1, 1, true). // Left - 6 rows
+		// AddItem(channelsList, 0, 1, 6, 1, 0, 0, false). // Left - 6 rows
 		AddItem(messagesList, 0, 2, 1, 2, 0, 0, false). // Left - 5 rows
 		AddItem(messageInput, 3, 1, 1, 3, 0, 0, false)  // Left - 3 rows
 	// AddItem(bx, 0, 3, 3, 3, 0, 0, false) // Right - 3 rows
 	// AddItem(bx, 3, 1, 1, 1, 0, 0, false) // Bottom - 1 row
 	// AddItem(label, 1, 1, 1, 1, 0, 0, false).
-	// AddItem(input, 1, 2, 1, 1, 0, 0, false).
+	// AddItem(input, 1, 2, 1, 1versBox
+	// messagesList.Box = messagesBox
+	// messageInput.Box = inputBox
+	// channelsList.Box = , 0, 0, false).
 	// AddItem(btn, 2, 1, 1, 2, 0, 0, false)
 
 	for i, guild := range dg.State.Guilds {
@@ -84,7 +93,6 @@ func initializeUi(dg *discordgo.Session) *tview.List {
 			fmt.Printf("Failed to get guild by id \"%s\"", guildId)
 			panic(err)
 		}
-		fmt.Println(guild.Name)
 
 		for j, channel := range guild.Channels {
 			if channel.Type == discordgo.ChannelTypeGuildText {
@@ -94,33 +102,31 @@ func initializeUi(dg *discordgo.Session) *tview.List {
 	})
 
 	channelsList.SetSelectedFunc(func(i int, channelName string, channelId string, r rune) {
-		messagesList.Clear()
-		app.SetFocus(messageInput)
+		// messagesList.Clear()
+		// app.SetFocus(messagesBox)
 		channel, err := dg.State.Channel(channelId)
 		if err != nil {
-			fmt.Printf("Failed to get guild by id \"%s\"", channelId)
+			fmt.Printf("Failed to get channel by id \"%s\"", channelId)
+			panic(err)
+		}
+		dg.State.MaxMessageCount = 20
+
+		if channel.MessageCount < 1 {
+			fmt.Println("no messages")
+			return
+		}
+		messages, err := dg.ChannelMessages(channelId, 20, "", "", "")
+		if err != nil {
+			fmt.Printf("Failed to get messages from channel \"%s\"", channelId)
 			panic(err)
 		}
 
-		for j, m := range channel.Messages {
-			if j < 20 {
-				var formattedMessage string
-				if len(m.Embeds) > 0 {
-					formattedMessage = "<Embed>"
-				} else if len(m.Attachments) > 0 {
-					formattedMessage = "<Attachment>"
-				} else {
-					formattedMessage = m.Content
-				}
-				messagesList.AddItem(m.Author.Username+": "+formattedMessage, "", rune(j), nil)
-			}
+		for j, m := range messages {
+			formattedMessage := formatDiscordMessage(m)
+			fmt.Println(m.Author.Username + ": " + formattedMessage)
+			messagesList.AddItem(m.Author.Username+": "+formattedMessage, "", rune(j), nil)
 		}
 	})
-
-	guildList.Box = serversBox
-	messagesList.Box = messagesBox
-	messageInput.Box = inputBox
-	channelsList.Box = textChannelsBox
 
 	if err := app.SetRoot(appGrid, true).Run(); err != nil {
 		panic(err)

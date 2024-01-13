@@ -28,6 +28,18 @@ func initializeDiscordClient(token string) (*discordgo.Session, error) {
 	return dg, nil
 }
 
+func formatDiscordMessage(m *discordgo.Message) string {
+	var formattedMessage string
+	if len(m.Embeds) > 0 {
+		formattedMessage = "<Embed>"
+	} else if len(m.Attachments) > 0 {
+		formattedMessage = "<Attachment>"
+	} else {
+		formattedMessage = m.Content
+	}
+	return formattedMessage
+}
+
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate, list *tview.List) {
 	// Handle incoming messages
 
@@ -42,14 +54,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate, list *tview
 
 	// }
 
-	var formattedMessage string
-	if len(m.Message.Embeds) > 0 {
-		formattedMessage = "<Embed>"
-	} else if len(m.Message.Attachments) > 0 {
-		formattedMessage = "<Attachment>"
-	} else {
-		formattedMessage = m.Message.Content
-	}
+	formattedMessage := formatDiscordMessage(m.Message)
 
 	// content := fmt.printf("[%s] #%s >> %s: %s\n", guild.Name, channel.Name, m.Author.Username, formattedMessage)
 	// fmt.Printf("[%s] #%s >> %s: %s\n", guild.Name, channel.Name, m.Author.Username, formattedMessage)
