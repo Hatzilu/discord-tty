@@ -10,8 +10,6 @@ import (
 )
 
 func main() {
-	tview.NewBox().SetBorder(true).SetTitle("Discord2")
-
 	// Set up Discord session
 	godotenv.Load()
 
@@ -39,12 +37,10 @@ func main() {
 	dg.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
 		messageCreate(s, m, messagesList)
 	})
-
 }
 
 func initializeUi(dg *discordgo.Session) *tview.List {
 
-	// bx := tview.NewBox().SetBorder(true).SetTitle("Discord")
 	serversBox := tview.NewBox().SetBorder(true).SetTitle("Guilds")
 	textChannelsBox := tview.NewBox().SetBorder(true)
 	messagesBox := tview.NewBox().SetBorder(true).SetTitle("Messages")
