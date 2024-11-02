@@ -1,15 +1,77 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/rivo/tview"
 )
 
+type Guild struct {
+	Banner      string   `json:"banner"`
+	Features    []string `json:"features"`
+	Icon        string   `json:"icon"`
+	Id          string   `json:"id"`
+	Name        string   `json:"name"`
+	Owner       bool     `json:"owner"`
+	Permissions string   `json:"permissions"`
+}
+
+type TokenResponse struct {
+	TokenType    string `json:"token_type"`
+	AccessToken  string `json:"access_token"`
+	ExpiresIn    uint32 `json:"expires_in"`
+	RefreshToken string `json:"refresh_token"`
+	Scope        string `json:"scope"`
+}
+
+type DiscordResponse interface{ []Guild }
+
+func discordApiRequest[T DiscordResponse](method string, endpoint string, body io.Reader, token string) (data T, err error) {
+	baseUrl := os.Getenv("DISCORD_API_ENDPOINT")
+	if baseUrl == "" {
+		return nil, errors.New("missing discord API endpoint env var")
+	}
+
+	url := strings.Join([]string{baseUrl, endpoint}, "")
+
+	r, err := http.NewRequest(method, url, body)
+
+	r.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	if err != nil {
+		return nil, err
+	}
+	client := http.Client{}
+	res, err := client.Do(r)
+	if err != nil {
+		return nil, err
+	}
+
+	defer res.Body.Close()
+
+	bodyBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println("Failed to parse token response body")
+		panic(err)
+	}
+	data = nil
+	if err := json.Unmarshal(bodyBytes, &data); err != nil { // Parse []byte to go struct pointer
+		fmt.Printf("Failed to unmarshal JSON: %s", err)
+		return nil, err
+	}
+	return data, nil
+}
+
 func initializeDiscordClient(token string) (*discordgo.Session, error) {
 
-	dg, err := discordgo.New("Bot " + token)
+	dg, err := discordgo.New("Bearer " + token)
 	if err != nil {
 		fmt.Println("Error creating Discord session:", err)
 		return dg, err

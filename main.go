@@ -1,8 +1,15 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/joho/godotenv"
@@ -14,36 +21,119 @@ func main() {
 	// Set up Discord session
 	godotenv.Load()
 
-	// Grab your own discord user token
-	// TODO: find a way to get it automatically
-	token := os.Getenv("USER_TOKEN")
-	if token == "" {
-		panic("No token provided")
+	token := TokenResponse{}
+	mux := http.NewServeMux()
+	srv := http.Server{
+		Addr:    os.Getenv("APP_ADDR"),
+		Handler: mux,
 	}
 
-	dg, err := initializeDiscordClient(token)
+	fmt.Println("No valid token found, please authenticate again.")
 
-	messagesList := initializeUi(dg)
+	mux.HandleFunc("/auth", func(w http.ResponseWriter, r *http.Request) {
+		code := r.URL.Query().Get("code")
+		if code == "" {
+			fmt.Println("Invalid code value")
+			io.WriteString(w, "Invalid code value\n")
+			return
+		}
 
-	if err != nil {
-		fmt.Println("Error creating Discord session:", err)
-		return
-	}
+		// auth with discord using the code from query params
+		u, err := url.Parse("https://discord.com/api/v10/oauth2/token")
+		if err != nil {
+			fmt.Println("Failed to parse discord API url")
+			panic(err)
+		}
 
-	wsErr := ConnectToGateWay(token, dg.Identify.Intents)
-	if err != nil {
-		panic(wsErr)
-	}
+		u.OmitHost = false
 
-	// Set up event handlers
-	dg.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
-		messageCreate(s, m, messagesList)
+		data := u.Query()
+		data.Set("client_id", os.Getenv("APP_CLIENT_ID"))
+		data.Set("client_secret", os.Getenv("APP_CLIENT_SECRET"))
+		data.Set("grant_type", "authorization_code")
+		data.Set("redirect_uri", fmt.Sprintf("%s/auth", os.Getenv("APP_REDIRECT_URL")))
+		data.Set("scope", "identify")
+		data.Set("code", code)
+
+		u.RawQuery = data.Encode()
+		r, err2 := http.NewRequest("POST", "https://discord.com/api/v10/oauth2/token", strings.NewReader(u.RawQuery))
+
+		if err2 != nil {
+			fmt.Println("Failed to init POST request")
+			panic(err2)
+		}
+
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.Header.Set("Content-Length", fmt.Sprint(len(u.RawQuery)))
+
+		fmt.Printf("posting to %s \n\n", r.URL)
+		fmt.Printf("request:  %+v\n", r)
+		fmt.Printf("Body:  %+v\n", strings.NewReader(u.RawQuery))
+
+		client := http.Client{}
+		res, err := client.Do(r)
+		if err != nil {
+			fmt.Println("Failed to request token from discord")
+			panic(err)
+		}
+
+		defer res.Body.Close()
+
+		bodyBytes, err := io.ReadAll(res.Body)
+		if err != nil {
+			fmt.Println("Failed to parse token response body")
+			panic(err)
+		}
+
+		if err := json.Unmarshal(bodyBytes, &token); err != nil { // Parse []byte to go struct pointer
+			fmt.Printf("Failed to unmarshal JSON: %s", err)
+		}
+
+		fmt.Printf("Authenticated successfully, shutting down local server... token: %s \n", token.AccessToken)
+		go srv.Shutdown(context.Background())
 	})
+
+	err := srv.ListenAndServe()
+
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		panic(err)
+	}
+
+	// now that we authenticated the user, we can use the token to auth with discord and make requests to the discord API
+
+	// fmt.Printf("Initializing discord client...")
+	// dg, err := initializeDiscordClient(token.AccessToken)
+
+	// if err != nil {
+	// 	fmt.Println("Error creating Discord session:", err)
+	// 	panic(err)
+	// }
+
+	// fmt.Printf("Connecting to gateway...")
+	// wsErr := ConnectToGateWay(token.AccessToken, dg.Identify.Intents)
+	// if wsErr != nil {
+	// 	panic(wsErr)
+	// }
+
+	guilds, err := discordApiRequest("GET", "/users/@me/guilds", nil, token.AccessToken)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(guilds)
+
+	messagesList := initializeUi(guilds, token.AccessToken)
+
+	fmt.Println(messagesList)
+	// // Set up event handlers
+	// dg.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
+	// 	messageCreate(s, m, messagesList)
+	// })
 }
 
-func initializeUi(dg *discordgo.Session) *tview.List {
+func initializeUi(guilds []Guild, token string) *tview.List {
 
-	serversBox := tview.NewBox().SetBorder(true).SetTitle("Guilds")
+	guildsBox := tview.NewBox().SetBorder(true).SetTitle("Guilds")
 	textChannelsBox := tview.NewBox().SetBorder(true)
 	messagesBox := tview.NewBox().SetBorder(true).SetTitle("Messages")
 	inputBox := tview.NewBox().SetBorder(true)
@@ -55,7 +145,7 @@ func initializeUi(dg *discordgo.Session) *tview.List {
 	guildList := tview.NewList()
 	messageInput := tview.NewInputField()
 
-	guildList.Box = serversBox
+	guildList.Box = guildsBox
 	messagesList.Box = messagesBox
 	messageInput.Box = inputBox
 	channelsList.Box = textChannelsBox
@@ -68,17 +158,17 @@ func initializeUi(dg *discordgo.Session) *tview.List {
 		// AddItem(channelsList, 0, 1, 6, 1, 0, 0, false). // Left - 6 rows
 		AddItem(messagesList, 0, 1, 1, 2, 0, 0, false). // Left - 5 rows
 		AddItem(messageInput, 3, 1, 1, 3, 0, 0, false)  // Left - 3 rows
-	// AddItem(bx, 0, 3, 3, 3, 0, 0, false) // Right - 3 rows
-	// AddItem(bx, 3, 1, 1, 1, 0, 0, false) // Bottom - 1 row
-	// AddItem(label, 1, 1, 1, 1, 0, 0, false).
-	// AddItem(input, 1, 2, 1, 1versBox
-	// messagesList.Box = messagesBox
-	// messageInput.Box = inputBox
-	// channelsList.Box = , 0, 0, false).
-	// AddItem(btn, 2, 1, 1, 2, 0, 0, false)
-
-	for i, guild := range dg.State.Guilds {
-		guildList.AddItem(guild.Name, guild.ID, rune(i), nil)
+		// AddItem(bx, 0, 3, 3, 3, 0, 0, false) // Right - 3 rows
+		// AddItem(bx, 3, 1, 1, 1, 0, 0, false) // Bottom - 1 row
+		// AddItem(label, 1, 1, 1, 1, 0, 0, false).
+		// AddItem(input, 1, 2, 1, 1versBox
+		// messagesList.Box = messagesBox
+		// messageInput.Box = inputBox
+		// channelsList.Box = , 0, 0, false).
+		// AddItem(btn, 2, 1, 1, 2, 0, 0, false)
+	for i, guild := range guilds {
+		fmt.Printf("Adding guild %s\n", guild.Name)
+		guildList.AddItem(guild.Name, string(guild.Id), rune(i), nil)
 	}
 
 	guildList.SetSelectedFunc(func(i int, guildName string, guildId string, r rune) {
@@ -88,40 +178,40 @@ func initializeUi(dg *discordgo.Session) *tview.List {
 		appGrid.RemoveItem(guildList)
 		channelsList.SetTitle(guildName)
 		appGrid.AddItem(channelsList, 0, 0, 6, 1, 1, 1, true) // Left - 6 rows
-		guild, err := dg.State.Guild(guildId)
+		channels, err := discordApiRequest("GET", "/guilds/%s/channels", nil, token)
 		if err != nil {
 			fmt.Printf("Failed to get guild by id \"%s\"", guildId)
 			panic(err)
 		}
 
-		for j, channel := range guild.Channels {
+		for j, channel := range channels {
 			if channel.Type == discordgo.ChannelTypeGuildText {
 				channelsList.AddItem("#"+channel.Name, channel.ID, rune(j), nil)
 			}
 		}
 	})
 
-	channelsList.SetSelectedFunc(func(i int, channelName string, channelId string, r rune) {
-		// messagesList.Clear()
-		// app.SetFocus(messagesBox)
-		channel, err := dg.State.Channel(channelId)
-		if err != nil {
-			fmt.Printf("Failed to get channel by id \"%s\"", channelId)
-			panic(err)
-		}
+	// channelsList.SetSelectedFunc(func(i int, channelName string, channelId string, r rune) {
+	// 	// messagesList.Clear()
+	// 	// app.SetFocus(messagesBox)
+	// 	channel, err := dg.State.Channel(channelId)
+	// 	if err != nil {
+	// 		fmt.Printf("Failed to get channel by id \"%s\"", channelId)
+	// 		panic(err)
+	// 	}
 
-		if len(channel.Messages) < 1 {
-			messagesList.Clear()
-			messagesList.AddItem("No messages in "+channelName, "", 0, nil)
-			return
-		}
+	// 	if len(channel.Messages) < 1 {
+	// 		messagesList.Clear()
+	// 		messagesList.AddItem("No messages in "+channelName, "", 0, nil)
+	// 		return
+	// 	}
 
-		for j, m := range channel.Messages {
-			formattedMessage := formatDiscordMessage(m)
-			fmt.Println(m.Author.Username + ": " + formattedMessage)
-			messagesList.AddItem(m.Author.Username+": "+formattedMessage, "", rune(j), nil)
-		}
-	})
+	// 	for j, m := range channel.Messages {
+	// 		formattedMessage := formatDiscordMessage(m)
+	// 		fmt.Println(m.Author.Username + ": " + formattedMessage)
+	// 		messagesList.AddItem(m.Author.Username+": "+formattedMessage, "", rune(j), nil)
+	// 	}
+	// })
 
 	if err := app.SetRoot(appGrid, true).Run(); err != nil {
 		panic(err)
