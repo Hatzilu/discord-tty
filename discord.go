@@ -13,16 +13,6 @@ import (
 	"github.com/rivo/tview"
 )
 
-type Guild struct {
-	Banner      string   `json:"banner"`
-	Features    []string `json:"features"`
-	Icon        string   `json:"icon"`
-	Id          string   `json:"id"`
-	Name        string   `json:"name"`
-	Owner       bool     `json:"owner"`
-	Permissions string   `json:"permissions"`
-}
-
 type TokenResponse struct {
 	TokenType    string `json:"token_type"`
 	AccessToken  string `json:"access_token"`
@@ -31,19 +21,25 @@ type TokenResponse struct {
 	Scope        string `json:"scope"`
 }
 
-type DiscordResponse interface{ []Guild }
+type DiscordResponse interface {
+	[]discordgo.UserGuild | []discordgo.Channel
+}
 
-func discordApiRequest[T DiscordResponse](method string, endpoint string, body io.Reader, token string) (data T, err error) {
+func discordApiRequest[T DiscordResponse](method string, endpoint string, body io.Reader, token *string) (data T, err error) {
 	baseUrl := os.Getenv("DISCORD_API_ENDPOINT")
+
 	if baseUrl == "" {
 		return nil, errors.New("missing discord API endpoint env var")
 	}
+
+	bearerToken := fmt.Sprintf("Bearer %s", *token)
+	fmt.Println(bearerToken)
 
 	url := strings.Join([]string{baseUrl, endpoint}, "")
 
 	r, err := http.NewRequest(method, url, body)
 
-	r.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+	r.Header.Add("Authorization", bearerToken)
 
 	if err != nil {
 		return nil, err
@@ -52,6 +48,10 @@ func discordApiRequest[T DiscordResponse](method string, endpoint string, body i
 	res, err := client.Do(r)
 	if err != nil {
 		return nil, err
+	}
+
+	if res.StatusCode != 200 {
+		return nil, errors.New(res.Status)
 	}
 
 	defer res.Body.Close()

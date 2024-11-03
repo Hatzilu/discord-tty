@@ -52,7 +52,7 @@ func main() {
 		data.Set("client_secret", os.Getenv("APP_CLIENT_SECRET"))
 		data.Set("grant_type", "authorization_code")
 		data.Set("redirect_uri", fmt.Sprintf("%s/auth", os.Getenv("APP_REDIRECT_URL")))
-		data.Set("scope", "identify")
+		data.Set("scope", "identify+guilds+guilds.channels.read+messages.read+guilds.members.read")
 		data.Set("code", code)
 
 		u.RawQuery = data.Encode()
@@ -66,9 +66,9 @@ func main() {
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		r.Header.Set("Content-Length", fmt.Sprint(len(u.RawQuery)))
 
-		fmt.Printf("posting to %s \n\n", r.URL)
-		fmt.Printf("request:  %+v\n", r)
-		fmt.Printf("Body:  %+v\n", strings.NewReader(u.RawQuery))
+		// fmt.Printf("posting to %s \n\n", r.URL)
+		// fmt.Printf("request:  %+v\n", r)
+		// fmt.Printf("Body:  %+v\n", strings.NewReader(u.RawQuery))
 
 		client := http.Client{}
 		res, err := client.Do(r)
@@ -89,7 +89,7 @@ func main() {
 			fmt.Printf("Failed to unmarshal JSON: %s", err)
 		}
 
-		fmt.Printf("Authenticated successfully, shutting down local server... token: %s \n", token.AccessToken)
+		fmt.Printf("Authenticated successfully, shutting down local server... token: %s", token.AccessToken)
 		go srv.Shutdown(context.Background())
 	})
 
@@ -100,38 +100,21 @@ func main() {
 	}
 
 	// now that we authenticated the user, we can use the token to auth with discord and make requests to the discord API
-
-	// fmt.Printf("Initializing discord client...")
-	// dg, err := initializeDiscordClient(token.AccessToken)
-
-	// if err != nil {
-	// 	fmt.Println("Error creating Discord session:", err)
-	// 	panic(err)
-	// }
-
-	// fmt.Printf("Connecting to gateway...")
-	// wsErr := ConnectToGateWay(token.AccessToken, dg.Identify.Intents)
-	// if wsErr != nil {
-	// 	panic(wsErr)
-	// }
-
-	guilds, err := discordApiRequest("GET", "/users/@me/guilds", nil, token.AccessToken)
+	_guilds, err := discordApiRequest[[]discordgo.UserGuild]("GET", "/users/@me/guilds", nil, &token.AccessToken)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println(guilds)
+	// initializeUi(guilds, &token.AccessToken)
 
-	messagesList := initializeUi(guilds, token.AccessToken)
-
-	fmt.Println(messagesList)
+	fmt.Println(_guilds)
 	// // Set up event handlers
 	// dg.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// 	messageCreate(s, m, messagesList)
 	// })
 }
 
-func initializeUi(guilds []Guild, token string) *tview.List {
+func initializeUi(guilds []discordgo.UserGuild, tokenPtr *string) *tview.List {
 
 	guildsBox := tview.NewBox().SetBorder(true).SetTitle("Guilds")
 	textChannelsBox := tview.NewBox().SetBorder(true)
@@ -168,25 +151,32 @@ func initializeUi(guilds []Guild, token string) *tview.List {
 		// AddItem(btn, 2, 1, 1, 2, 0, 0, false)
 	for i, guild := range guilds {
 		fmt.Printf("Adding guild %s\n", guild.Name)
-		guildList.AddItem(guild.Name, string(guild.Id), rune(i), nil)
+		guildList.AddItem(guild.Name, string(guild.ID), rune(i), nil)
 	}
 
 	guildList.SetSelectedFunc(func(i int, guildName string, guildId string, r rune) {
-		messagesList.Clear()
-		channelsList.Clear()
+		fmt.Println("hi")
+		if messagesList.GetItemCount() > 0 {
+			messagesList.Clear()
+		}
+		if channelsList.GetItemCount() > 0 {
+			channelsList.Clear()
+		}
 		app.SetFocus(textChannelsBox)
-		appGrid.RemoveItem(guildList)
+		// appGrid.RemoveItem(guildList)
 		channelsList.SetTitle(guildName)
 		appGrid.AddItem(channelsList, 0, 0, 6, 1, 1, 1, true) // Left - 6 rows
-		channels, err := discordApiRequest("GET", "/guilds/%s/channels", nil, token)
+		url := fmt.Sprintf("/guilds/%X/channels", guildId)
+		channels, err := discordApiRequest[[]discordgo.Channel]("GET", url, nil, tokenPtr)
+		fmt.Printf("Channels: %+v", channels)
 		if err != nil {
-			fmt.Printf("Failed to get guild by id \"%s\"", guildId)
+			fmt.Printf("Failed to get channels for guild  \"%s\"", guildId)
 			panic(err)
 		}
 
 		for j, channel := range channels {
 			if channel.Type == discordgo.ChannelTypeGuildText {
-				channelsList.AddItem("#"+channel.Name, channel.ID, rune(j), nil)
+				channelsList.AddItem("#"+channel.Name, channel.ID, rune(10+j), nil)
 			}
 		}
 	})
@@ -216,6 +206,5 @@ func initializeUi(guilds []Guild, token string) *tview.List {
 	if err := app.SetRoot(appGrid, true).Run(); err != nil {
 		panic(err)
 	}
-
 	return messagesList
 }
